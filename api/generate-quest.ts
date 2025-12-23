@@ -46,10 +46,10 @@ export default async function handler(
   }
 
   try {
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
 
-    if (!openrouterKey) {
-      throw new Error('OPENROUTER_API_KEY not configured');
+    if (!geminiKey) {
+      throw new Error('GEMINI_API_KEY not configured');
     }
 
     const systemPrompt = `Generate an RPG dungeon quest based on: "${prompt}"
@@ -96,36 +96,35 @@ JSON FORMAT:
   ]
 }`;
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    // Use Gemini API (free tier)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openrouterKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://sgravoquest.vercel.app',
-        'X-Title': 'SgravoQuest'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3.5-haiku',  // Upgraded for larger maps
-        messages: [{ role: 'user', content: systemPrompt }],
-        temperature: 0.7,
-        max_tokens: 8000  // 30x20 map needs more tokens
+        contents: [{ parts: [{ text: systemPrompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8000
+        }
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenRouter error:', errorData);
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      console.error('Gemini error:', errorData);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!data.choices || !data.choices[0]) {
-      console.error('No choices in response:', JSON.stringify(data));
-      throw new Error('API returned no choices');
+    if (!data.candidates || !data.candidates[0]) {
+      console.error('No candidates in response:', JSON.stringify(data));
+      throw new Error('API returned no candidates');
     }
 
-    const questText = data.choices[0].message.content;
+    const questText = data.candidates[0].content.parts[0].text;
 
     // Parse JSON from response
     let quest: Quest;
