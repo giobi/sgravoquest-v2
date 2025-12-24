@@ -380,7 +380,7 @@ export class TownScene extends Phaser.Scene {
     }).setScrollFactor(0).setDepth(100)
 
     // Controls hint
-    this.add.text(400, 290, 'WASD: Muovi | E: Parla | ESC: Menu', {
+    this.add.text(400, 290, '↑←↓→ o WASD: Muovi | E: Parla | ESC: Menu', {
       fontSize: '10px',
       color: '#333333',
       backgroundColor: '#ffffffaa',
