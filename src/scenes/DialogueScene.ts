@@ -3,7 +3,6 @@ import Phaser from 'phaser'
 interface NPCData {
   name: string
   personality: string
-  sprite: string
 }
 
 interface Message {
@@ -14,13 +13,10 @@ interface Message {
 export class DialogueScene extends Phaser.Scene {
   private npc!: NPCData
   private messages: Message[] = []
-  private inputText: string = ''
-  private dialogueBox!: Phaser.GameObjects.Container
   private messagesContainer!: Phaser.GameObjects.Container
-  private inputDisplay!: Phaser.GameObjects.Text
   private isLoading: boolean = false
-  private cursor!: Phaser.GameObjects.Text
-  private cursorTimer!: Phaser.Time.TimerEvent
+  private inputElement!: HTMLInputElement
+  private loadingText!: Phaser.GameObjects.Text
 
   constructor() {
     super({ key: 'DialogueScene' })
@@ -29,7 +25,6 @@ export class DialogueScene extends Phaser.Scene {
   init(data: { npc: NPCData }) {
     this.npc = data.npc
     this.messages = []
-    this.inputText = ''
     this.isLoading = false
   }
 
@@ -37,154 +32,161 @@ export class DialogueScene extends Phaser.Scene {
     const { width, height } = this.cameras.main
 
     // Semi-transparent background
-    const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.7)
+    const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.8)
     bg.setOrigin(0)
+    bg.setInteractive()
 
-    // Main dialogue container
-    this.dialogueBox = this.add.container(width / 2, height / 2)
+    // Main dialogue box
+    const boxWidth = 600
+    const boxHeight = 400
+    const boxX = (width - boxWidth) / 2
+    const boxY = (height - boxHeight) / 2
 
-    // Dialogue box background
-    const boxBg = this.add.rectangle(0, 0, 700, 450, 0x2d3748)
-    boxBg.setStrokeStyle(4, 0x8b5cf6)
-    this.dialogueBox.add(boxBg)
+    // Box background
+    const boxBg = this.add.rectangle(width / 2, height / 2, boxWidth, boxHeight, 0x1e293b)
+    boxBg.setStrokeStyle(3, 0x8b5cf6)
 
     // NPC header
-    const headerBg = this.add.rectangle(0, -200, 700, 50, 0x1a202c)
-    this.dialogueBox.add(headerBg)
-
-    const npcName = this.add.text(0, -200, this.npc.name, {
-      fontSize: '24px',
+    this.add.rectangle(width / 2, boxY + 30, boxWidth - 20, 50, 0x334155)
+    this.add.text(width / 2, boxY + 30, this.npc.name, {
+      fontSize: '22px',
       color: '#fbbf24',
       fontStyle: 'bold'
     }).setOrigin(0.5)
-    this.dialogueBox.add(npcName)
 
-    // Messages area
-    this.messagesContainer = this.add.container(-320, -150)
-    this.dialogueBox.add(this.messagesContainer)
+    // Messages area (scrollable container)
+    this.messagesContainer = this.add.container(boxX + 20, boxY + 70)
 
-    // Input area background
-    const inputBg = this.add.rectangle(0, 180, 660, 50, 0x1a202c)
-    inputBg.setStrokeStyle(2, 0x4a5568)
-    this.dialogueBox.add(inputBg)
+    // Loading indicator
+    this.loadingText = this.add.text(width / 2, boxY + boxHeight - 100, '', {
+      fontSize: '14px',
+      color: '#94a3b8'
+    }).setOrigin(0.5)
 
-    // Input text display
-    this.inputDisplay = this.add.text(-310, 180, '', {
-      fontSize: '18px',
-      color: '#ffffff',
-      wordWrap: { width: 600 }
-    }).setOrigin(0, 0.5)
-    this.dialogueBox.add(this.inputDisplay)
+    // Create real HTML input
+    this.createHTMLInput(boxX, boxY + boxHeight - 50, boxWidth)
 
-    // Blinking cursor
-    this.cursor = this.add.text(-310, 180, '|', {
-      fontSize: '18px',
-      color: '#8b5cf6'
-    }).setOrigin(0, 0.5)
-    this.dialogueBox.add(this.cursor)
+    // Close button
+    const closeBtn = this.add.text(boxX + boxWidth - 30, boxY + 10, '✕', {
+      fontSize: '20px',
+      color: '#ef4444'
+    }).setInteractive({ useHandCursor: true })
+    closeBtn.on('pointerdown', () => this.closeDialogue())
 
-    this.cursorTimer = this.time.addEvent({
-      delay: 500,
-      callback: () => {
-        this.cursor.setVisible(!this.cursor.visible)
-      },
-      loop: true
-    })
+    // ESC to close
+    this.input.keyboard?.on('keydown-ESC', () => this.closeDialogue())
 
     // Help text
-    const helpText = this.add.text(0, 230, 'Scrivi e premi INVIO | ESC per uscire', {
-      fontSize: '14px',
-      color: '#9ca3af'
+    this.add.text(width / 2, boxY + boxHeight + 20, 'INVIO per inviare | ESC per uscire', {
+      fontSize: '12px',
+      color: '#64748b'
     }).setOrigin(0.5)
-    this.dialogueBox.add(helpText)
 
-    // Keyboard input
-    this.input.keyboard?.on('keydown', this.handleKeyDown, this)
-
-    // Initial greeting from NPC
+    // Initial greeting
     this.addNPCGreeting()
   }
 
+  private createHTMLInput(x: number, y: number, boxWidth: number) {
+    // Get canvas position
+    const canvas = this.game.canvas
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = rect.width / canvas.width
+    const scaleY = rect.height / canvas.height
+
+    // Create input element
+    this.inputElement = document.createElement('input')
+    this.inputElement.type = 'text'
+    this.inputElement.placeholder = 'Scrivi qualcosa...'
+    this.inputElement.maxLength = 150
+    this.inputElement.autocomplete = 'off'
+    this.inputElement.spellcheck = false
+
+    // Style it
+    Object.assign(this.inputElement.style, {
+      position: 'absolute',
+      left: `${rect.left + (x + 10) * scaleX}px`,
+      top: `${rect.top + y * scaleY}px`,
+      width: `${(boxWidth - 40) * scaleX}px`,
+      height: '36px',
+      fontSize: '16px',
+      padding: '8px 12px',
+      border: '2px solid #475569',
+      borderRadius: '8px',
+      backgroundColor: '#0f172a',
+      color: '#f1f5f9',
+      outline: 'none',
+      fontFamily: 'inherit',
+      zIndex: '1000'
+    })
+
+    // Focus styling
+    this.inputElement.addEventListener('focus', () => {
+      this.inputElement.style.borderColor = '#8b5cf6'
+    })
+    this.inputElement.addEventListener('blur', () => {
+      this.inputElement.style.borderColor = '#475569'
+    })
+
+    // Handle Enter key
+    this.inputElement.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !this.isLoading) {
+        e.preventDefault()
+        this.sendMessage()
+      }
+      if (e.key === 'Escape') {
+        this.closeDialogue()
+      }
+    })
+
+    document.body.appendChild(this.inputElement)
+
+    // Focus after a brief delay
+    setTimeout(() => this.inputElement.focus(), 100)
+  }
+
   private async addNPCGreeting() {
-    this.isLoading = true
-    this.updateLoadingState()
+    this.setLoading(true)
 
     try {
-      const greeting = await this.callAI('Saluta il visitatore che si è appena avvicinato. Presentati brevemente.')
+      const greeting = await this.callAI('Saluta il visitatore. Presentati in modo caratteristico.')
       this.addMessage('npc', greeting)
-    } catch (error) {
-      this.addMessage('npc', `Ciao, sono ${this.npc.name}. Come posso aiutarti?`)
+    } catch {
+      this.addMessage('npc', `Ciao! Sono ${this.npc.name}. Come posso aiutarti?`)
     }
 
-    this.isLoading = false
-    this.updateLoadingState()
+    this.setLoading(false)
   }
 
-  private handleKeyDown(event: KeyboardEvent) {
-    if (this.isLoading) return
+  private setLoading(loading: boolean) {
+    this.isLoading = loading
+    this.inputElement.disabled = loading
+    this.loadingText.setText(loading ? '💭 Sta pensando...' : '')
 
-    if (event.key === 'Escape') {
-      this.closeDialogue()
-      return
-    }
-
-    if (event.key === 'Enter' && this.inputText.trim()) {
-      this.sendMessage()
-      return
-    }
-
-    if (event.key === 'Backspace') {
-      this.inputText = this.inputText.slice(0, -1)
-      this.updateInputDisplay()
-      return
-    }
-
-    // Only allow printable characters
-    if (event.key.length === 1) {
-      if (this.inputText.length < 100) {
-        this.inputText += event.key
-        this.updateInputDisplay()
-      }
-    }
-  }
-
-  private updateInputDisplay() {
-    this.inputDisplay.setText(this.inputText)
-    // Move cursor to end of text
-    this.cursor.setX(-310 + this.inputDisplay.width + 2)
-  }
-
-  private updateLoadingState() {
-    if (this.isLoading) {
-      this.inputDisplay.setText('...')
-      this.cursor.setVisible(false)
+    if (loading) {
+      this.inputElement.style.opacity = '0.5'
     } else {
-      this.inputDisplay.setText(this.inputText)
-      this.cursor.setVisible(true)
+      this.inputElement.style.opacity = '1'
+      this.inputElement.focus()
     }
   }
 
   private async sendMessage() {
-    const userMessage = this.inputText.trim()
-    this.inputText = ''
-    this.updateInputDisplay()
+    const text = this.inputElement.value.trim()
+    if (!text) return
 
-    // Add user message
-    this.addMessage('user', userMessage)
+    this.inputElement.value = ''
+    this.addMessage('user', text)
 
-    // Get AI response
-    this.isLoading = true
-    this.updateLoadingState()
+    this.setLoading(true)
 
     try {
-      const response = await this.callAI(userMessage)
+      const response = await this.callAI(text)
       this.addMessage('npc', response)
-    } catch (error) {
-      this.addMessage('npc', 'Hmm... scusa, mi sono distratto. Cosa dicevi?')
+    } catch {
+      this.addMessage('npc', 'Scusa, mi sono perso... cosa dicevi?')
     }
 
-    this.isLoading = false
-    this.updateLoadingState()
+    this.setLoading(false)
   }
 
   private addMessage(role: 'user' | 'npc', content: string) {
@@ -193,48 +195,68 @@ export class DialogueScene extends Phaser.Scene {
   }
 
   private renderMessages() {
-    // Clear existing messages
     this.messagesContainer.removeAll(true)
 
-    // Show last 4 messages
-    const visibleMessages = this.messages.slice(-4)
+    const maxVisible = 5
+    const visibleMessages = this.messages.slice(-maxVisible)
     let yOffset = 0
 
     visibleMessages.forEach((msg) => {
       const isNPC = msg.role === 'npc'
-      const color = isNPC ? '#fbbf24' : '#60a5fa'
-      const prefix = isNPC ? `${this.npc.name}: ` : 'Tu: '
+      const bgColor = isNPC ? 0x374151 : 0x4f46e5
+      const textColor = '#f1f5f9'
+      const prefix = isNPC ? '' : ''
+      const align = isNPC ? 0 : 560
 
-      const text = this.add.text(0, yOffset, prefix + msg.content, {
-        fontSize: '16px',
-        color: color,
-        wordWrap: { width: 640 }
+      // Message bubble background
+      const text = this.add.text(0, 0, msg.content, {
+        fontSize: '14px',
+        color: textColor,
+        wordWrap: { width: 400 }
       })
 
+      const bubbleWidth = Math.min(text.width + 24, 420)
+      const bubbleHeight = text.height + 16
+      const bubbleX = isNPC ? bubbleWidth / 2 : 560 - bubbleWidth / 2
+
+      const bubble = this.add.rectangle(bubbleX, yOffset + bubbleHeight / 2, bubbleWidth, bubbleHeight, bgColor)
+      bubble.setStrokeStyle(1, isNPC ? 0x4b5563 : 0x6366f1)
+
+      text.setPosition(bubbleX - text.width / 2, yOffset + 8)
+
+      // Name label for NPC
+      if (isNPC && this.messages.filter(m => m.role === 'npc').length <= this.messages.indexOf(msg) + 1) {
+        const nameLabel = this.add.text(12, yOffset - 16, this.npc.name.split(' ')[0], {
+          fontSize: '11px',
+          color: '#fbbf24'
+        })
+        this.messagesContainer.add(nameLabel)
+      }
+
+      this.messagesContainer.add(bubble)
       this.messagesContainer.add(text)
-      yOffset += text.height + 10
+
+      yOffset += bubbleHeight + 12
     })
   }
 
   private async callAI(userMessage: string): Promise<string> {
-    // Build conversation history
-    const history = this.messages.map(m =>
+    const history = this.messages.slice(-6).map(m =>
       m.role === 'user' ? `Visitatore: ${m.content}` : `${this.npc.name}: ${m.content}`
     ).join('\n')
 
-    const prompt = `Sei ${this.npc.name} in un piccolo villaggio italiano fantasy.
-Personalità: ${this.npc.personality}
+    const prompt = `Sei ${this.npc.name} in un villaggio italiano fantasy.
+${this.npc.personality}
 
-REGOLE IMPORTANTI:
-- Rispondi SEMPRE in italiano
-- Rispondi in 1-2 frasi brevi (massimo 50 parole)
+REGOLE:
+- Rispondi SOLO in italiano
+- MAX 2 frasi brevi (40 parole)
 - Rimani nel personaggio
-- Non rompere mai l'immersione
-- Non menzionare che sei un'AI
+- Mai dire che sei un'AI
 
-${history ? `Conversazione finora:\n${history}\n\n` : ''}Visitatore: ${userMessage}
+${history ? `Dialogo:\n${history}\n\n` : ''}Visitatore: ${userMessage}
 
-${this.npc.name}:`
+Rispondi come ${this.npc.name.split(' ')[0]}:`
 
     const response = await fetch('/api/generate-dialogue', {
       method: 'POST',
@@ -242,18 +264,27 @@ ${this.npc.name}:`
       body: JSON.stringify({ prompt })
     })
 
-    if (!response.ok) {
-      throw new Error('API call failed')
-    }
+    if (!response.ok) throw new Error('API error')
 
     const data = await response.json()
-    return data.response || 'Non ho capito...'
+    return (data.response || 'Non ho capito...').trim()
   }
 
   private closeDialogue() {
-    this.cursorTimer.destroy()
-    this.input.keyboard?.off('keydown', this.handleKeyDown, this)
+    // Remove HTML input
+    if (this.inputElement && this.inputElement.parentNode) {
+      this.inputElement.parentNode.removeChild(this.inputElement)
+    }
+
+    this.input.keyboard?.off('keydown-ESC')
     this.scene.stop()
     this.scene.resume('TownScene')
+  }
+
+  // Clean up on scene shutdown
+  shutdown() {
+    if (this.inputElement && this.inputElement.parentNode) {
+      this.inputElement.parentNode.removeChild(this.inputElement)
+    }
   }
 }

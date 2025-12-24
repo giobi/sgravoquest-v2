@@ -346,6 +346,10 @@ export class TownScene extends Phaser.Scene {
 
   setupInput() {
     this.cursors = this.input.keyboard!.createCursorKeys()
+
+    // Prevent browser from capturing WASD keys
+    this.input.keyboard!.addCapture(['W', 'A', 'S', 'D', 'E', 'ENTER', 'ESC'])
+
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
