@@ -8,16 +8,26 @@ interface NPC {
   greeting: string
 }
 
+interface Door {
+  x: number
+  y: number
+  name: string
+  description: string
+}
+
 export class TownScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private wasd!: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key }
   private npcs: NPC[] = []
+  private doors: Door[] = []
   private buildings!: Phaser.Physics.Arcade.StaticGroup
   private interactHint?: Phaser.GameObjects.Text
   private nearbyNPC: NPC | null = null
+  private nearbyDoor: Door | null = null
   private readonly TILE_SIZE = 16
   private playerDirection = 'down'
+  private messageText?: Phaser.GameObjects.Text
 
   constructor() {
     super({ key: 'TownScene' })
@@ -168,12 +178,12 @@ export class TownScene extends Phaser.Scene {
     this.buildings = this.physics.add.staticGroup()
 
     const buildingData = [
-      { x: 8, y: 12, w: 5, h: 4, color: 0xe57373, name: 'Panetteria', roofColor: 0xc62828 },
-      { x: 8, y: 26, w: 5, h: 4, color: 0x64b5f6, name: 'Casa Blu', roofColor: 0x1976d2 },
-      { x: 38, y: 12, w: 6, h: 5, color: 0xfff176, name: 'Municipio', roofColor: 0xf9a825 },
-      { x: 38, y: 27, w: 5, h: 4, color: 0xa5d6a7, name: 'Erboristeria', roofColor: 0x388e3c },
-      { x: 20, y: 8, w: 4, h: 3, color: 0xce93d8, name: 'Biblioteca', roofColor: 0x7b1fa2 },
-      { x: 30, y: 8, w: 4, h: 3, color: 0xffcc80, name: 'Locanda', roofColor: 0xe65100 },
+      { x: 8, y: 12, w: 5, h: 4, color: 0xe57373, name: 'Panetteria', roofColor: 0xc62828, desc: 'Profumo di pane appena sfornato...' },
+      { x: 8, y: 26, w: 5, h: 4, color: 0x64b5f6, name: 'Casa Blu', roofColor: 0x1976d2, desc: 'Una tranquilla casa di campagna.' },
+      { x: 38, y: 12, w: 6, h: 5, color: 0xfff176, name: 'Municipio', roofColor: 0xf9a825, desc: 'Il cuore amministrativo del villaggio.' },
+      { x: 38, y: 27, w: 5, h: 4, color: 0xa5d6a7, name: 'Erboristeria', roofColor: 0x388e3c, desc: 'Erbe misteriose e pozioni curative.' },
+      { x: 20, y: 8, w: 4, h: 3, color: 0xce93d8, name: 'Biblioteca', roofColor: 0x7b1fa2, desc: 'Migliaia di libri antichi ti aspettano.' },
+      { x: 30, y: 8, w: 4, h: 3, color: 0xffcc80, name: 'Locanda', roofColor: 0xe65100, desc: 'Birra fresca e pettegolezzi caldi!' },
     ]
 
     buildingData.forEach(b => {
@@ -194,6 +204,14 @@ export class TownScene extends Phaser.Scene {
 
       // Door
       this.add.rectangle(bx + bw/2, by + bh - 8, 12, 16, 0x5d4037).setDepth(7)
+
+      // Door zone (for interaction) - just below the building
+      this.doors.push({
+        x: bx + bw/2,
+        y: by + bh + 12,
+        name: b.name,
+        description: b.desc
+      })
 
       // Windows
       if (b.w >= 5) {
@@ -396,7 +414,32 @@ export class TownScene extends Phaser.Scene {
         playerScene: this
       })
       this.scene.pause()
+    } else if (this.nearbyDoor) {
+      // Show building description
+      this.showMessage(`${this.nearbyDoor.name}: ${this.nearbyDoor.description}`)
     }
+  }
+
+  showMessage(text: string) {
+    // Remove existing message
+    if (this.messageText) {
+      this.messageText.destroy()
+    }
+
+    this.messageText = this.add.text(400, 50, text, {
+      fontSize: '14px',
+      color: '#ffffff',
+      backgroundColor: '#1e293bdd',
+      padding: { x: 16, y: 10 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100)
+
+    // Auto-hide after 3 seconds
+    this.time.delayedCall(3000, () => {
+      if (this.messageText) {
+        this.messageText.destroy()
+        this.messageText = undefined
+      }
+    })
   }
 
   update() {
@@ -426,6 +469,7 @@ export class TownScene extends Phaser.Scene {
 
     // Check for nearby NPCs
     this.nearbyNPC = null
+    this.nearbyDoor = null
     let closestDist = 40
 
     for (const npc of this.npcs) {
@@ -440,20 +484,42 @@ export class TownScene extends Phaser.Scene {
       }
     }
 
+    // Check for nearby doors (only if no NPC nearby)
+    if (!this.nearbyNPC) {
+      let closestDoorDist = 30
+      for (const door of this.doors) {
+        const dist = Phaser.Math.Distance.Between(
+          this.player.x, this.player.y,
+          door.x, door.y
+        )
+
+        if (dist < closestDoorDist) {
+          closestDoorDist = dist
+          this.nearbyDoor = door
+        }
+      }
+    }
+
     // Show/hide interact hint
     const currentNPC = this.nearbyNPC
+    const currentDoor = this.nearbyDoor
+
+    if (!this.interactHint) {
+      this.interactHint = this.add.text(400, 260, '', {
+        fontSize: '11px',
+        color: '#ffffff',
+        backgroundColor: '#333333dd',
+        padding: { x: 8, y: 4 }
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(100)
+    }
+
     if (currentNPC) {
-      if (!this.interactHint) {
-        this.interactHint = this.add.text(400, 260, '', {
-          fontSize: '11px',
-          color: '#ffffff',
-          backgroundColor: '#333333dd',
-          padding: { x: 8, y: 4 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(100)
-      }
       this.interactHint.setText(`Premi E per parlare con ${currentNPC.name}`)
       this.interactHint.setVisible(true)
-    } else if (this.interactHint) {
+    } else if (currentDoor) {
+      this.interactHint.setText(`Premi E per entrare: ${currentDoor.name}`)
+      this.interactHint.setVisible(true)
+    } else {
       this.interactHint.setVisible(false)
     }
   }
