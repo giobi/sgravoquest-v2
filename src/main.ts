@@ -1,15 +1,15 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
 import { MenuScene } from './scenes/MenuScene'
-import { GameScene } from './scenes/GameScene'
-import { UIScene } from './scenes/UIScene'
+import { TownScene } from './scenes/TownScene'
+import { DialogueScene } from './scenes/DialogueScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
   parent: 'app',
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#87ceeb',
   pixelArt: true,
   physics: {
     default: 'arcade',
@@ -18,7 +18,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [BootScene, MenuScene, GameScene, UIScene],
+  scene: [BootScene, MenuScene, TownScene, DialogueScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
