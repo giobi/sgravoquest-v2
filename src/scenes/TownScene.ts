@@ -234,11 +234,12 @@ export class TownScene extends Phaser.Scene {
   }
 
   createPlayer() {
-    // Player starts in the plaza
-    this.player = this.physics.add.sprite(26 * this.TILE_SIZE, 24 * this.TILE_SIZE, 'player_sprite')
+    // Player starts in the plaza - use new animated sprite
+    this.player = this.physics.add.sprite(26 * this.TILE_SIZE, 24 * this.TILE_SIZE, 'player', 0)
     this.player.setDepth(20)
     this.player.setCollideWorldBounds(true)
-    this.player.setSize(14, 14)
+    this.player.setSize(12, 12)
+    this.player.setOffset(2, 4)
 
     // Set world bounds
     this.physics.world.setBounds(0, 0, 50 * this.TILE_SIZE, 40 * this.TILE_SIZE)
@@ -448,24 +449,36 @@ export class TownScene extends Phaser.Scene {
     const speed = 100
     let vx = 0
     let vy = 0
+    let moving = false
 
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       vx = -speed
       this.playerDirection = 'left'
+      moving = true
     } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
       vx = speed
       this.playerDirection = 'right'
+      moving = true
     }
 
     if (this.cursors.up.isDown || this.wasd.W.isDown) {
       vy = -speed
       this.playerDirection = 'up'
+      moving = true
     } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
       vy = speed
       this.playerDirection = 'down'
+      moving = true
     }
 
     this.player.setVelocity(vx, vy)
+
+    // Play walk or idle animation based on movement
+    if (moving) {
+      this.player.anims.play(`player-walk-${this.playerDirection}`, true)
+    } else {
+      this.player.anims.play(`player-idle-${this.playerDirection}`, true)
+    }
 
     // Check for nearby NPCs
     this.nearbyNPC = null

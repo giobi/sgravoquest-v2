@@ -31,119 +31,123 @@ export class BootScene extends Phaser.Scene {
       loadingText.destroy()
     })
 
-    // 0x72 Dungeon Tileset II - Classic 16x16 pixel art (public domain)
-    // https://0x72.itch.io/dungeontileset-ii
-    this.load.spritesheet('dungeon_tiles',
-      'https://i.imgur.com/ejYSWdl.png', // 0x72 tileset hosted
+    // Pokemon-style tileset (CC-BY 3.0 - Damian Gasinski aka Gassasin)
+    this.load.spritesheet('tileset',
+      '/sprites/PokemonLike.png',
       { frameWidth: 16, frameHeight: 16 }
     )
 
-    // 0x72 Characters
-    this.load.spritesheet('characters',
-      'https://i.imgur.com/4LxXBnU.png', // characters spritesheet
+    // Player spritesheet with walk animations
+    this.load.spritesheet('player',
+      '/sprites/player-sheet.png',
       { frameWidth: 16, frameHeight: 16 }
     )
   }
 
   create() {
-    // Create all sprites programmatically - reliable and always works
-    this.createPlayerSprite()
-    this.createEnemySprite()
-    this.createNpcSprite()
-    this.createCoinSprite()
-    this.createPortalSprite()
+    // Create player walk animations
+    // Frames: 0-3 down, 4-7 up, 8-11 left, 12-15 right
+    this.anims.create({
+      key: 'player-walk-down',
+      frames: this.anims.generateFrameNumbers('player', { start: 0, end: 3 }),
+      frameRate: 8,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'player-walk-up',
+      frames: this.anims.generateFrameNumbers('player', { start: 4, end: 7 }),
+      frameRate: 8,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'player-walk-left',
+      frames: this.anims.generateFrameNumbers('player', { start: 8, end: 11 }),
+      frameRate: 8,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'player-walk-right',
+      frames: this.anims.generateFrameNumbers('player', { start: 12, end: 15 }),
+      frameRate: 8,
+      repeat: -1
+    })
+
+    this.anims.create({
+      key: 'player-idle-down',
+      frames: [{ key: 'player', frame: 0 }],
+      frameRate: 1
+    })
+
+    this.anims.create({
+      key: 'player-idle-up',
+      frames: [{ key: 'player', frame: 4 }],
+      frameRate: 1
+    })
+
+    this.anims.create({
+      key: 'player-idle-left',
+      frames: [{ key: 'player', frame: 8 }],
+      frameRate: 1
+    })
+
+    this.anims.create({
+      key: 'player-idle-right',
+      frames: [{ key: 'player', frame: 12 }],
+      frameRate: 1
+    })
+
+    // Create NPC sprites (different colors for different NPCs)
+    this.createNPCSprites()
 
     this.scene.start('MenuScene')
   }
 
-  createPlayerSprite() {
-    const g = this.add.graphics()
+  createNPCSprites() {
+    // Use tileset frame for NPCs or create colored versions
+    const npcColors = [
+      { name: 'npc_baker', color: 0xffab91 },     // Marco - orange
+      { name: 'npc_librarian', color: 0xce93d8 }, // Sofia - purple
+      { name: 'npc_elder', color: 0xbcaaa4 },     // Giovanni - brown
+      { name: 'npc_healer', color: 0xa5d6a7 },    // Luna - green
+      { name: 'npc_mayor', color: 0xfff176 },     // Tommaso - yellow
+      { name: 'npc_innkeeper', color: 0xffcc80 }  // Rosa - orange
+    ]
 
-    // Knight character (16x16) - retro style
-    g.fillStyle(0x3b82f6)
-    g.fillRect(4, 6, 8, 8)
+    npcColors.forEach(npc => {
+      const g = this.add.graphics()
+
+      // Simple villager sprite
+      g.fillStyle(npc.color)
+      g.fillRect(4, 4, 8, 10)  // Body
+      g.fillStyle(0xfcd34d)
+      g.fillRect(5, 1, 6, 4)   // Head
+      g.fillStyle(0x1f2937)
+      g.fillRect(6, 2, 1, 1)   // Eye
+      g.fillRect(9, 2, 1, 1)   // Eye
+      g.fillStyle(0x5d4037)
+      g.fillRect(5, 14, 2, 2)  // Feet
+      g.fillRect(9, 14, 2, 2)
+
+      g.generateTexture(npc.name, 16, 16)
+      g.destroy()
+    })
+
+    // Fallback generic NPC
+    const g = this.add.graphics()
+    g.fillStyle(0x8b5cf6)
+    g.fillRect(4, 4, 8, 10)
     g.fillStyle(0xfcd34d)
-    g.fillRect(5, 2, 6, 5)
-    g.fillStyle(0x92400e)
-    g.fillRect(5, 1, 6, 2)
+    g.fillRect(5, 1, 6, 4)
     g.fillStyle(0x1f2937)
-    g.fillRect(6, 4, 1, 1)
-    g.fillRect(9, 4, 1, 1)
-    g.fillStyle(0x4b5563)
+    g.fillRect(6, 2, 1, 1)
+    g.fillRect(9, 2, 1, 1)
+    g.fillStyle(0x5d4037)
     g.fillRect(5, 14, 2, 2)
     g.fillRect(9, 14, 2, 2)
-    g.fillStyle(0xd1d5db)
-    g.fillRect(12, 5, 2, 8)
-
-    g.generateTexture('player_sprite', 16, 16)
-    g.destroy()
-  }
-
-  createEnemySprite() {
-    const g = this.add.graphics()
-
-    // Slime blob
-    g.fillStyle(0x22c55e)
-    g.fillRect(3, 8, 10, 6)
-    g.fillRect(4, 6, 8, 2)
-    g.fillRect(5, 5, 6, 1)
-    g.fillStyle(0x16a34a)
-    g.fillRect(4, 12, 8, 2)
-    g.fillStyle(0x1f2937)
-    g.fillRect(5, 8, 2, 2)
-    g.fillRect(9, 8, 2, 2)
-    g.fillStyle(0x86efac)
-    g.fillRect(6, 6, 1, 1)
-
-    g.generateTexture('enemy_sprite', 16, 16)
-    g.destroy()
-  }
-
-  createNpcSprite() {
-    const g = this.add.graphics()
-
-    // Wizard
-    g.fillStyle(0x8b5cf6)
-    g.fillRect(4, 6, 8, 9)
-    g.fillStyle(0xfcd34d)
-    g.fillRect(5, 2, 6, 5)
-    g.fillStyle(0x9ca3af)
-    g.fillRect(6, 6, 4, 3)
-    g.fillStyle(0x6d28d9)
-    g.fillRect(4, 0, 8, 3)
-    g.fillStyle(0x1f2937)
-    g.fillRect(6, 4, 1, 1)
-    g.fillRect(9, 4, 1, 1)
-    g.fillStyle(0x92400e)
-    g.fillRect(13, 2, 2, 12)
-
     g.generateTexture('npc_sprite', 16, 16)
-    g.destroy()
-  }
-
-  createCoinSprite() {
-    const g = this.add.graphics()
-
-    g.fillStyle(0xfbbf24)
-    g.fillCircle(8, 8, 5)
-    g.fillStyle(0xf59e0b)
-    g.fillCircle(8, 8, 3)
-
-    g.generateTexture('coin_sprite', 16, 16)
-    g.destroy()
-  }
-
-  createPortalSprite() {
-    const g = this.add.graphics()
-
-    g.lineStyle(2, 0x8b5cf6)
-    g.strokeCircle(8, 8, 6)
-    g.fillStyle(0xc4b5fd, 0.5)
-    g.fillCircle(8, 8, 4)
-    g.fillStyle(0x7c3aed)
-    g.fillCircle(8, 8, 2)
-
-    g.generateTexture('portal_sprite', 16, 16)
     g.destroy()
   }
 }
