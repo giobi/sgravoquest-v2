@@ -18,53 +18,48 @@ interface Door {
 // Tileset is 40x40 tiles (640x640 px, 16x16 each)
 // Frame = col + (row * 40)
 const TILES = {
-  // Grass variants (row 38-39, green area at bottom)
-  GRASS: [1520, 1521, 1522, 1560, 1561, 1562],
-  GRASS_DARK: 1523,
+  // Grass variants (row 0-2, plain green)
+  GRASS: [0, 1, 2, 40, 41, 80, 81],
 
-  // Path/road (brown tiles)
-  PATH_H: 564,  // horizontal path
-  PATH_V: 604,  // vertical path
-  PATH_CORNER_TL: 563,
-  PATH_CORNER_TR: 565,
-  PATH_CORNER_BL: 643,
-  PATH_CORNER_BR: 645,
+  // Path - gray cobblestone (row 10-11, cols 1-3)
+  PATH: [401, 402, 403, 441, 442, 443],
 
-  // Trees (top rows)
-  TREE_TOP: [0, 1, 2, 40, 41, 42],
-  TREE_TRUNK: [80, 81, 82],
+  // Trees - 2x2 tiles (row 0-1, cols 6-7)
+  TREE_TOP_L: 6,
+  TREE_TOP_R: 7,
+  TREE_BOT_L: 46,
+  TREE_BOT_R: 47,
 
-  // Houses - using the nice brown houses visible in tileset
-  HOUSE_ROOF_L: 241,
-  HOUSE_ROOF_M: 242,
-  HOUSE_ROOF_R: 243,
-  HOUSE_WALL_L: 281,
-  HOUSE_WALL_M: 282,
-  HOUSE_WALL_R: 283,
-  HOUSE_DOOR: 322,
-  HOUSE_WINDOW: 321,
+  // Water/fountain - use cobblestone instead (purple water sucks)
+  WATER: [401, 402, 441, 442],
 
-  // Big house (4-wide)
-  BIG_HOUSE_ROOF: [244, 245, 246, 247],
-  BIG_HOUSE_WALL: [284, 285, 286, 287],
+  // Rocks (row 2, cols 4-5)
+  ROCK: [84, 85],
 
-  // Water
-  WATER: [180, 181, 220, 221],
+  // Flowers - grass tiles with subtle decoration
+  FLOWER: [1, 2, 41],
 
-  // Decorations
-  FLOWER_RED: 45,
-  FLOWER_YELLOW: 46,
-  FLOWER_PURPLE: 47,
-  BUSH: 83,
-  ROCK: 163,
-  FENCE_H: 484,
-  FENCE_V: 524,
+  // Bush (dark green, row 2)
+  BUSH: 82,
 
-  // Fountain (center plaza)
-  FOUNTAIN: [261, 262, 301, 302],
+  // Houses - brown wooden (rows 12-15, cols 4-7)
+  // Roof peak (orange) - row 12
+  HOUSE_ROOF_L: 484,
+  HOUSE_ROOF_M: 485,
+  HOUSE_ROOF_R: 486,
+  // Walls (brown logs) - rows 13-14
+  HOUSE_WALL_L: 524,
+  HOUSE_WALL_M: 525,
+  HOUSE_WALL_R: 526,
+  // Window (cyan) and door
+  HOUSE_WINDOW: 567,
+  HOUSE_DOOR: 565,
 
-  // NPCs from tileset (row ~17-18, various characters)
-  NPC_FRAMES: [697, 698, 699, 700, 701, 702, 737, 738, 739, 740]
+  // Fence (gray stone)
+  FENCE: [401, 441],
+
+  // NPCs - character sprites (row 19, cols 14-19)
+  NPC_FRAMES: [774, 775, 776, 777, 778, 779]
 }
 
 export class TownScene extends Phaser.Scene {
@@ -158,24 +153,24 @@ export class TownScene extends Phaser.Scene {
   }
 
   createPaths() {
-    // Main horizontal path through village (y = 15)
+    // Main horizontal path through village (y = 14-16)
     for (let x = 0; x < this.MAP_WIDTH; x++) {
-      this.addTile(x, 14, TILES.PATH_H, 1)
-      this.addTile(x, 15, TILES.PATH_H, 1)
-      this.addTile(x, 16, TILES.PATH_H, 1)
+      this.addTile(x, 14, Phaser.Math.RND.pick(TILES.PATH), 1)
+      this.addTile(x, 15, Phaser.Math.RND.pick(TILES.PATH), 1)
+      this.addTile(x, 16, Phaser.Math.RND.pick(TILES.PATH), 1)
     }
 
     // Vertical path to plaza (x = 19-21)
     for (let y = 8; y < 22; y++) {
-      this.addTile(19, y, TILES.PATH_V, 1)
-      this.addTile(20, y, TILES.PATH_V, 1)
-      this.addTile(21, y, TILES.PATH_V, 1)
+      this.addTile(19, y, Phaser.Math.RND.pick(TILES.PATH), 1)
+      this.addTile(20, y, Phaser.Math.RND.pick(TILES.PATH), 1)
+      this.addTile(21, y, Phaser.Math.RND.pick(TILES.PATH), 1)
     }
 
     // Plaza area (center)
     for (let y = 12; y < 19; y++) {
       for (let x = 16; x < 25; x++) {
-        this.addTile(x, y, TILES.PATH_H, 1)
+        this.addTile(x, y, Phaser.Math.RND.pick(TILES.PATH), 1)
       }
     }
   }
@@ -193,9 +188,9 @@ export class TownScene extends Phaser.Scene {
     buildings.forEach((b, i) => {
       this.createHouse(b.x, b.y, i % 2 === 0 ? 3 : 4)
 
-      // Add door zone
+      // Add door zone (door is at row y+3, center)
       this.doors.push({
-        x: (b.x + 1.5) * this.TILE_SIZE,
+        x: (b.x + Math.floor((i % 2 === 0 ? 3 : 4) / 2) + 0.5) * this.TILE_SIZE,
         y: (b.y + 4) * this.TILE_SIZE,
         name: b.name,
         description: b.desc
@@ -212,34 +207,38 @@ export class TownScene extends Phaser.Scene {
   }
 
   createHouse(x: number, y: number, width: number) {
-    // Roof row
-    this.addTile(x, y, TILES.HOUSE_ROOF_L, 5)
-    for (let i = 1; i < width - 1; i++) {
+    // Use 4-row house structure for better visibility
+    // Row 0: Roof peak (orange top)
+    for (let i = 0; i < width; i++) {
       this.addTile(x + i, y, TILES.HOUSE_ROOF_M, 5)
     }
-    this.addTile(x + width - 1, y, TILES.HOUSE_ROOF_R, 5)
 
-    // Wall row 1
-    this.addTile(x, y + 1, TILES.HOUSE_WALL_L, 5)
-    for (let i = 1; i < width - 1; i++) {
-      this.addTile(x + i, y + 1, TILES.HOUSE_WINDOW, 5)
+    // Row 1: Roof lower (brown)
+    for (let i = 0; i < width; i++) {
+      this.addTile(x + i, y + 1, TILES.HOUSE_WALL_L, 5)
     }
-    this.addTile(x + width - 1, y + 1, TILES.HOUSE_WALL_R, 5)
 
-    // Wall row 2 with door
-    this.addTile(x, y + 2, TILES.HOUSE_WALL_L, 5)
-    const doorPos = Math.floor(width / 2)
-    for (let i = 1; i < width - 1; i++) {
-      if (i === doorPos) {
-        this.addTile(x + i, y + 2, TILES.HOUSE_DOOR, 5)
-      } else {
+    // Row 2: Wall with windows
+    for (let i = 0; i < width; i++) {
+      if (i === 0 || i === width - 1) {
         this.addTile(x + i, y + 2, TILES.HOUSE_WALL_M, 5)
+      } else {
+        this.addTile(x + i, y + 2, TILES.HOUSE_WINDOW, 5)
       }
     }
-    this.addTile(x + width - 1, y + 2, TILES.HOUSE_WALL_R, 5)
 
-    // Collision for entire building
-    this.addCollider(x, y, width, 3)
+    // Row 3: Wall with door
+    const doorPos = Math.floor(width / 2)
+    for (let i = 0; i < width; i++) {
+      if (i === doorPos) {
+        this.addTile(x + i, y + 3, TILES.HOUSE_DOOR, 5)
+      } else {
+        this.addTile(x + i, y + 3, TILES.HOUSE_WALL_R, 5)
+      }
+    }
+
+    // Collision for entire building (4 rows now)
+    this.addCollider(x, y, width, 4)
   }
 
   createDecorations() {
@@ -260,30 +259,34 @@ export class TownScene extends Phaser.Scene {
     for (let i = 0; i < 25; i++) {
       const fx = Phaser.Math.Between(2, this.MAP_WIDTH - 3)
       const fy = Phaser.Math.Between(2, this.MAP_HEIGHT - 3)
-      const flowerFrame = Phaser.Math.RND.pick([TILES.FLOWER_RED, TILES.FLOWER_YELLOW, TILES.FLOWER_PURPLE])
+      const flowerFrame = Phaser.Math.RND.pick(TILES.FLOWER)
       this.addTile(fx, fy, flowerFrame, 2)
     }
 
-    // Bushes
+    // Bushes and rocks
     for (let i = 0; i < 10; i++) {
       const bx = Phaser.Math.Between(2, this.MAP_WIDTH - 3)
       const by = Phaser.Math.Between(2, this.MAP_HEIGHT - 3)
-      this.addTile(bx, by, TILES.BUSH, 2)
+      if (i < 6) {
+        this.addTile(bx, by, TILES.BUSH, 2)
+      } else {
+        this.addTile(bx, by, Phaser.Math.RND.pick(TILES.ROCK), 2)
+      }
     }
 
     // Fences along some edges
     for (let x = 0; x < 6; x++) {
-      this.addTile(x, 0, TILES.FENCE_H, 3)
-      this.addTile(this.MAP_WIDTH - 1 - x, 0, TILES.FENCE_H, 3)
+      this.addTile(x, 0, TILES.FENCE[0], 3)
+      this.addTile(this.MAP_WIDTH - 1 - x, 0, TILES.FENCE[0], 3)
     }
   }
 
   createTree(x: number, y: number) {
-    // Tree top (2x2)
-    this.addTile(x, y, TILES.TREE_TOP[0], 6)
-    this.addTile(x + 1, y, TILES.TREE_TOP[1], 6)
-    this.addTile(x, y + 1, TILES.TREE_TOP[3], 6)
-    this.addTile(x + 1, y + 1, TILES.TREE_TOP[4], 6)
+    // Tree (2x2)
+    this.addTile(x, y, TILES.TREE_TOP_L, 6)
+    this.addTile(x + 1, y, TILES.TREE_TOP_R, 6)
+    this.addTile(x, y + 1, TILES.TREE_BOT_L, 6)
+    this.addTile(x + 1, y + 1, TILES.TREE_BOT_R, 6)
 
     // Collision
     this.addCollider(x, y, 2, 2)
