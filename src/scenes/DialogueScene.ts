@@ -127,8 +127,11 @@ export class DialogueScene extends Phaser.Scene {
       this.inputElement.style.borderColor = '#475569'
     })
 
-    // Handle Enter key
+    // Handle keyboard - stop propagation so game doesn't capture WASD/Space
     this.inputElement.addEventListener('keydown', (e) => {
+      // Allow typing - stop game from capturing these keys
+      e.stopPropagation()
+
       if (e.key === 'Enter' && !this.isLoading) {
         e.preventDefault()
         this.sendMessage()

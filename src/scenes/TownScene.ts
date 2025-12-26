@@ -50,8 +50,8 @@ const TILES = {
   CHURCH_ROOF: 484,
   CHURCH_WALL: 524,
 
-  // NPCs (row 19)
-  NPC: 774
+  // NPCs - use visible character sprite (row 4, col 4 = walking person)
+  NPC: 164
 }
 
 export class TownScene extends Phaser.Scene {
@@ -302,8 +302,8 @@ export class TownScene extends Phaser.Scene {
       const sprite = this.physics.add.sprite(data.x * this.TILE, data.y * this.TILE, 'tileset', TILES.NPC)
       sprite.setDepth(15).setImmovable(true)
 
-      const nameTag = this.add.text(data.x * this.TILE, data.y * this.TILE - 10, data.name.split(' ')[0], {
-        fontSize: '6px', color: '#fff', backgroundColor: '#333a', padding: { x: 1, y: 1 }
+      const nameTag = this.add.text(data.x * this.TILE, data.y * this.TILE - 14, data.name.split(' ')[0], {
+        fontSize: '10px', color: '#fbbf24', backgroundColor: '#000000cc', padding: { x: 3, y: 2 }
       }).setOrigin(0.5).setDepth(16)
 
       sprite.setData('nameTag', nameTag)
@@ -344,7 +344,8 @@ export class TownScene extends Phaser.Scene {
 
   setupInput() {
     this.cursors = this.input.keyboard!.createCursorKeys()
-    this.input.keyboard!.addCapture(['W', 'A', 'S', 'D', 'E', 'ENTER', 'ESC'])
+    // Don't capture WASD - let them work in chat. Use arrow keys or WASD without capture
+    this.input.keyboard!.addCapture(['E', 'ESC'])
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
