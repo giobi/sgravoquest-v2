@@ -18,48 +18,40 @@ interface Door {
 // Tileset is 40x40 tiles (640x640 px, 16x16 each)
 // Frame = col + (row * 40)
 const TILES = {
-  // Grass variants (row 0-2, plain green)
-  GRASS: [0, 1, 2, 40, 41, 80, 81],
+  // Grass - plain green (row 0-2)
+  GRASS: [0, 1, 2, 40, 41],
 
-  // Path - gray cobblestone (row 10-11, cols 1-3)
-  PATH: [401, 402, 403, 441, 442, 443],
+  // Water - TRUE blue/cyan (row 7, 9)
+  WATER: 284,
+  WATER_ALT: 364,
 
-  // Trees - 2x2 tiles (row 0-1, cols 6-7)
-  TREE_TOP_L: 6,
-  TREE_TOP_R: 7,
-  TREE_BOT_L: 46,
-  TREE_BOT_R: 47,
+  // Path - tan/sandy (row 4-5)
+  PATH: 168,
+  PATH_H: 169,
+  PATH_V: 208,
+  PATH_ALT: 209,
 
-  // Water/fountain - use cobblestone instead (purple water sucks)
-  WATER: [401, 402, 441, 442],
+  // Bridge - wooden planks (row 5)
+  BRIDGE: 204,
 
-  // Rocks (row 2, cols 4-5)
-  ROCK: [84, 85],
+  // Trees (row 0-1, 2x2)
+  TREE_TL: 6,
+  TREE_TR: 7,
+  TREE_BL: 46,
+  TREE_BR: 47,
 
-  // Flowers - grass tiles with subtle decoration
-  FLOWER: [1, 2, 41],
+  // Houses - brown wooden (row 12-13)
+  ROOF: 485,
+  WALL: 525,
+  WALL_WINDOW: 567,
+  WALL_DOOR: 565,
 
-  // Bush (dark green, row 2)
-  BUSH: 82,
+  // Church
+  CHURCH_ROOF: 484,
+  CHURCH_WALL: 524,
 
-  // Houses - brown wooden (rows 12-15, cols 4-7)
-  // Roof peak (orange) - row 12
-  HOUSE_ROOF_L: 484,
-  HOUSE_ROOF_M: 485,
-  HOUSE_ROOF_R: 486,
-  // Walls (brown logs) - rows 13-14
-  HOUSE_WALL_L: 524,
-  HOUSE_WALL_M: 525,
-  HOUSE_WALL_R: 526,
-  // Window (cyan) and door
-  HOUSE_WINDOW: 567,
-  HOUSE_DOOR: 565,
-
-  // Fence (gray stone)
-  FENCE: [401, 441],
-
-  // NPCs - character sprites (row 19, cols 14-19)
-  NPC_FRAMES: [774, 775, 776, 777, 778, 779]
+  // NPCs (row 19)
+  NPC: 774
 }
 
 export class TownScene extends Phaser.Scene {
@@ -72,359 +64,280 @@ export class TownScene extends Phaser.Scene {
   private interactHint?: Phaser.GameObjects.Text
   private nearbyNPC: NPC | null = null
   private nearbyDoor: Door | null = null
-  private readonly TILE_SIZE = 16
+  private readonly TILE = 16
   private playerDirection = 'down'
   private messageText?: Phaser.GameObjects.Text
-  private readonly MAP_WIDTH = 40
-  private readonly MAP_HEIGHT = 30
+
+  // Map size
+  private readonly W = 30  // width in tiles
+  private readonly H = 24  // height in tiles
 
   constructor() {
     super({ key: 'TownScene' })
   }
 
   create() {
-    // Create collision group
     this.colliders = this.physics.add.staticGroup()
 
-    // Build the map with real tiles
-    this.createTileMap()
-
-    // Create player
+    // Build Verbania-inspired map
+    this.createMap()
     this.createPlayer()
-
-    // Create NPCs
     this.createNPCs()
-
-    // Setup controls
     this.setupInput()
-
-    // Setup camera
     this.setupCamera()
-
-    // Create UI
     this.createUI()
 
-    // Collisions
     this.physics.add.collider(this.player, this.colliders)
   }
 
-  createTileMap() {
-    // Layer 1: Ground (grass everywhere)
-    for (let y = 0; y < this.MAP_HEIGHT; y++) {
-      for (let x = 0; x < this.MAP_WIDTH; x++) {
-        const grassFrame = Phaser.Math.RND.pick(TILES.GRASS)
-        this.addTile(x, y, grassFrame, 0)
+  tile(x: number, y: number, frame: number, depth: number = 1) {
+    return this.add.image(x * this.TILE + 8, y * this.TILE + 8, 'tileset', frame).setDepth(depth)
+  }
+
+  block(x: number, y: number, w: number = 1, h: number = 1) {
+    const rect = this.add.rectangle(
+      x * this.TILE + (w * this.TILE) / 2,
+      y * this.TILE + (h * this.TILE) / 2,
+      w * this.TILE, h * this.TILE
+    ).setVisible(false)
+    this.colliders.add(rect)
+  }
+
+  createMap() {
+    // === LAYER 0: Base grass everywhere ===
+    for (let y = 0; y < this.H; y++) {
+      for (let x = 0; x < this.W; x++) {
+        this.tile(x, y, Phaser.Math.RND.pick(TILES.GRASS), 0)
       }
     }
 
-    // Layer 2: Paths
-    this.createPaths()
-
-    // Layer 3: Buildings
-    this.createBuildings()
-
-    // Layer 4: Decorations (trees, flowers, etc)
-    this.createDecorations()
-
-    // Layer 5: Water/Fountain in plaza
-    this.createFountain()
-  }
-
-  addTile(x: number, y: number, frame: number, depth: number): Phaser.GameObjects.Image {
-    const tile = this.add.image(
-      x * this.TILE_SIZE + this.TILE_SIZE / 2,
-      y * this.TILE_SIZE + this.TILE_SIZE / 2,
-      'tileset',
-      frame
-    )
-    tile.setDepth(depth)
-    return tile
-  }
-
-  addCollider(x: number, y: number, w: number = 1, h: number = 1) {
-    const collider = this.add.rectangle(
-      x * this.TILE_SIZE + (w * this.TILE_SIZE) / 2,
-      y * this.TILE_SIZE + (h * this.TILE_SIZE) / 2,
-      w * this.TILE_SIZE,
-      h * this.TILE_SIZE
-    )
-    collider.setVisible(false)
-    this.colliders.add(collider)
-  }
-
-  createPaths() {
-    // Main horizontal path through village (y = 14-16)
-    for (let x = 0; x < this.MAP_WIDTH; x++) {
-      this.addTile(x, 14, Phaser.Math.RND.pick(TILES.PATH), 1)
-      this.addTile(x, 15, Phaser.Math.RND.pick(TILES.PATH), 1)
-      this.addTile(x, 16, Phaser.Math.RND.pick(TILES.PATH), 1)
-    }
-
-    // Vertical path to plaza (x = 19-21)
-    for (let y = 8; y < 22; y++) {
-      this.addTile(19, y, Phaser.Math.RND.pick(TILES.PATH), 1)
-      this.addTile(20, y, Phaser.Math.RND.pick(TILES.PATH), 1)
-      this.addTile(21, y, Phaser.Math.RND.pick(TILES.PATH), 1)
-    }
-
-    // Plaza area (center)
-    for (let y = 12; y < 19; y++) {
-      for (let x = 16; x < 25; x++) {
-        this.addTile(x, y, Phaser.Math.RND.pick(TILES.PATH), 1)
+    // === LAYER 1: Lake at bottom (rows 20-23) ===
+    for (let y = 20; y < this.H; y++) {
+      for (let x = 0; x < this.W; x++) {
+        // Alternate water tiles for variety
+        this.tile(x, y, (x + y) % 2 === 0 ? TILES.WATER : TILES.WATER_ALT, 1)
       }
     }
-  }
+    // Lake collision
+    this.block(0, 20, this.W, 4)
 
-  createBuildings() {
-    const buildings = [
-      { x: 3, y: 8, name: 'Panetteria', desc: 'Profumo di pane fresco...' },
-      { x: 3, y: 20, name: 'Casa Blu', desc: 'Una tranquilla dimora.' },
-      { x: 32, y: 8, name: 'Municipio', desc: 'Il cuore del villaggio.' },
-      { x: 32, y: 20, name: 'Erboristeria', desc: 'Erbe e pozioni misteriose.' },
-      { x: 12, y: 4, name: 'Biblioteca', desc: 'Sapere antico.' },
-      { x: 26, y: 4, name: 'Locanda', desc: 'Riposo e pettegolezzi!' },
+    // === LAYER 2: Rivers on sides (cols 3-4 left, 25-26 right) ===
+    // Left river (San Bernardino)
+    for (let y = 0; y < 20; y++) {
+      this.tile(3, y, TILES.WATER, 1)
+      this.tile(4, y, TILES.WATER, 1)
+    }
+    this.block(3, 0, 2, 18) // Collision except at bridge
+
+    // Right river (San Giovanni)
+    for (let y = 0; y < 20; y++) {
+      this.tile(25, y, TILES.WATER, 1)
+      this.tile(26, y, TILES.WATER, 1)
+    }
+    this.block(25, 0, 2, 18)
+
+    // === LAYER 3: Lungolago (row 18-19) ===
+    for (let x = 0; x < this.W; x++) {
+      this.tile(x, 18, TILES.PATH_H, 2)
+      this.tile(x, 19, TILES.PATH_H, 2)
+    }
+
+    // === LAYER 4: Bridges over rivers ===
+    // Left bridge
+    for (let i = 0; i < 2; i++) {
+      this.tile(3, 18 + i, TILES.BRIDGE, 3)
+      this.tile(4, 18 + i, TILES.BRIDGE, 3)
+    }
+    // Right bridge
+    for (let i = 0; i < 2; i++) {
+      this.tile(25, 18 + i, TILES.BRIDGE, 3)
+      this.tile(26, 18 + i, TILES.BRIDGE, 3)
+    }
+
+    // === LAYER 5: Piazza centrale (cols 12-17, rows 14-17) ===
+    for (let y = 14; y < 18; y++) {
+      for (let x = 12; x < 18; x++) {
+        this.tile(x, y, TILES.PATH, 2)
+      }
+    }
+
+    // === LAYER 6: Two streets going up from piazza ===
+    // Left street (Via principale sx)
+    for (let y = 4; y < 14; y++) {
+      this.tile(13, y, TILES.PATH_V, 2)
+      this.tile(14, y, TILES.PATH_V, 2)
+    }
+    // Right street (Via principale dx)
+    for (let y = 4; y < 14; y++) {
+      this.tile(15, y, TILES.PATH_V, 2)
+      this.tile(16, y, TILES.PATH_V, 2)
+    }
+
+    // === LAYER 7: Chiesa at top center ===
+    this.createChurch(13, 1)
+
+    // === LAYER 8: Houses in centro storico ===
+    // Left side houses
+    this.createHouse(6, 6, 'Panetteria', 'Profumo di pane fresco')
+    this.createHouse(6, 11, 'Biblioteca', 'Sapere antico')
+
+    // Right side houses
+    this.createHouse(20, 6, 'Erboristeria', 'Erbe e pozioni')
+    this.createHouse(20, 11, 'Locanda', 'Riposo e storie')
+
+    // === LAYER 9: Trees scattered in green areas ===
+    const treeSpots = [
+      [1, 2], [1, 8], [1, 14],
+      [8, 3], [8, 9], [10, 15],
+      [19, 15], [21, 3], [21, 9],
+      [28, 2], [28, 8], [28, 14]
     ]
+    treeSpots.forEach(([x, y]) => this.createTree(x, y))
 
-    buildings.forEach((b, i) => {
-      this.createHouse(b.x, b.y, i % 2 === 0 ? 3 : 4)
+    // === LAYER 10: Vigili (guards) at edges ===
+    this.createGuard(1, 18, 'Vigile', 'Di là si va a Pallanza... meglio restare qui!')
+    this.createGuard(28, 18, 'Vigile', 'La Svizzera? Non oggi, mi spiace!')
+  }
 
-      // Add door zone (door is at row y+3, center)
-      this.doors.push({
-        x: (b.x + Math.floor((i % 2 === 0 ? 3 : 4) / 2) + 0.5) * this.TILE_SIZE,
-        y: (b.y + 4) * this.TILE_SIZE,
-        name: b.name,
-        description: b.desc
-      })
+  createChurch(x: number, y: number) {
+    // 4x3 church
+    for (let dy = 0; dy < 3; dy++) {
+      for (let dx = 0; dx < 4; dx++) {
+        if (dy === 0) {
+          this.tile(x + dx, y + dy, TILES.CHURCH_ROOF, 5)
+        } else {
+          this.tile(x + dx, y + dy, TILES.CHURCH_WALL, 5)
+        }
+      }
+    }
+    // Door in center
+    this.tile(x + 1, y + 2, TILES.WALL_DOOR, 5)
+    this.tile(x + 2, y + 2, TILES.WALL_DOOR, 5)
 
-      // Building label
-      this.add.text(
-        (b.x + 1.5) * this.TILE_SIZE,
-        (b.y - 0.5) * this.TILE_SIZE,
-        b.name,
-        { fontSize: '8px', color: '#ffffff', backgroundColor: '#333333aa', padding: { x: 2, y: 1 } }
-      ).setOrigin(0.5).setDepth(10)
+    this.block(x, y, 4, 3)
+
+    this.add.text((x + 2) * this.TILE, (y - 0.5) * this.TILE, '⛪ Chiesa', {
+      fontSize: '8px', color: '#fff', backgroundColor: '#333a', padding: { x: 2, y: 1 }
+    }).setOrigin(0.5).setDepth(10)
+
+    this.doors.push({
+      x: (x + 2) * this.TILE,
+      y: (y + 3) * this.TILE,
+      name: 'Chiesa',
+      description: 'La chiesa del villaggio. Pace e silenzio.'
     })
   }
 
-  createHouse(x: number, y: number, width: number) {
-    // Use 4-row house structure for better visibility
-    // Row 0: Roof peak (orange top)
-    for (let i = 0; i < width; i++) {
-      this.addTile(x + i, y, TILES.HOUSE_ROOF_M, 5)
-    }
-
-    // Row 1: Roof lower (brown)
-    for (let i = 0; i < width; i++) {
-      this.addTile(x + i, y + 1, TILES.HOUSE_WALL_L, 5)
-    }
-
-    // Row 2: Wall with windows
-    for (let i = 0; i < width; i++) {
-      if (i === 0 || i === width - 1) {
-        this.addTile(x + i, y + 2, TILES.HOUSE_WALL_M, 5)
-      } else {
-        this.addTile(x + i, y + 2, TILES.HOUSE_WINDOW, 5)
+  createHouse(x: number, y: number, name: string, desc: string) {
+    // 3x3 house
+    for (let dy = 0; dy < 3; dy++) {
+      for (let dx = 0; dx < 3; dx++) {
+        if (dy === 0) {
+          this.tile(x + dx, y + dy, TILES.ROOF, 5)
+        } else if (dy === 1) {
+          this.tile(x + dx, y + dy, dx === 1 ? TILES.WALL_WINDOW : TILES.WALL, 5)
+        } else {
+          this.tile(x + dx, y + dy, dx === 1 ? TILES.WALL_DOOR : TILES.WALL, 5)
+        }
       }
     }
 
-    // Row 3: Wall with door
-    const doorPos = Math.floor(width / 2)
-    for (let i = 0; i < width; i++) {
-      if (i === doorPos) {
-        this.addTile(x + i, y + 3, TILES.HOUSE_DOOR, 5)
-      } else {
-        this.addTile(x + i, y + 3, TILES.HOUSE_WALL_R, 5)
-      }
-    }
+    this.block(x, y, 3, 3)
 
-    // Collision for entire building (4 rows now)
-    this.addCollider(x, y, width, 4)
-  }
+    this.add.text((x + 1.5) * this.TILE, (y - 0.5) * this.TILE, name, {
+      fontSize: '7px', color: '#fbbf24', backgroundColor: '#333a', padding: { x: 2, y: 1 }
+    }).setOrigin(0.5).setDepth(10)
 
-  createDecorations() {
-    // Trees around edges
-    const treePositions = [
-      [1, 2], [1, 12], [1, 25],
-      [38, 2], [38, 12], [38, 25],
-      [8, 2], [14, 2], [25, 2], [31, 2],
-      [8, 26], [14, 26], [25, 26], [31, 26],
-      [6, 14], [10, 18], [29, 14], [33, 18],
-    ]
-
-    treePositions.forEach(([x, y]) => {
-      this.createTree(x, y)
+    this.doors.push({
+      x: (x + 1.5) * this.TILE,
+      y: (y + 3.5) * this.TILE,
+      name,
+      description: desc
     })
-
-    // Flowers scattered
-    for (let i = 0; i < 25; i++) {
-      const fx = Phaser.Math.Between(2, this.MAP_WIDTH - 3)
-      const fy = Phaser.Math.Between(2, this.MAP_HEIGHT - 3)
-      const flowerFrame = Phaser.Math.RND.pick(TILES.FLOWER)
-      this.addTile(fx, fy, flowerFrame, 2)
-    }
-
-    // Bushes and rocks
-    for (let i = 0; i < 10; i++) {
-      const bx = Phaser.Math.Between(2, this.MAP_WIDTH - 3)
-      const by = Phaser.Math.Between(2, this.MAP_HEIGHT - 3)
-      if (i < 6) {
-        this.addTile(bx, by, TILES.BUSH, 2)
-      } else {
-        this.addTile(bx, by, Phaser.Math.RND.pick(TILES.ROCK), 2)
-      }
-    }
-
-    // Fences along some edges
-    for (let x = 0; x < 6; x++) {
-      this.addTile(x, 0, TILES.FENCE[0], 3)
-      this.addTile(this.MAP_WIDTH - 1 - x, 0, TILES.FENCE[0], 3)
-    }
   }
 
   createTree(x: number, y: number) {
-    // Tree (2x2)
-    this.addTile(x, y, TILES.TREE_TOP_L, 6)
-    this.addTile(x + 1, y, TILES.TREE_TOP_R, 6)
-    this.addTile(x, y + 1, TILES.TREE_BOT_L, 6)
-    this.addTile(x + 1, y + 1, TILES.TREE_BOT_R, 6)
-
-    // Collision
-    this.addCollider(x, y, 2, 2)
+    this.tile(x, y, TILES.TREE_TL, 6)
+    this.tile(x + 1, y, TILES.TREE_TR, 6)
+    this.tile(x, y + 1, TILES.TREE_BL, 6)
+    this.tile(x + 1, y + 1, TILES.TREE_BR, 6)
+    this.block(x, y, 2, 2)
   }
 
-  createFountain() {
-    // Simple fountain in plaza center (4 tiles)
-    const fx = 19
-    const fy = 14
+  createGuard(x: number, y: number, name: string, message: string) {
+    const sprite = this.physics.add.sprite(x * this.TILE, y * this.TILE, 'tileset', TILES.NPC)
+    sprite.setDepth(15).setImmovable(true)
 
-    // Water tiles
-    this.addTile(fx, fy, TILES.WATER[0], 3)
-    this.addTile(fx + 1, fy, TILES.WATER[1], 3)
-    this.addTile(fx, fy + 1, TILES.WATER[2], 3)
-    this.addTile(fx + 1, fy + 1, TILES.WATER[3], 3)
+    this.add.text(x * this.TILE, (y - 1) * this.TILE, '👮', {
+      fontSize: '12px'
+    }).setOrigin(0.5).setDepth(16)
 
-    // Collision
-    this.addCollider(fx, fy, 2, 2)
+    this.npcs.push({
+      sprite,
+      name,
+      personality: `Sei un vigile urbano. Sei gentile ma fermo. Rispondi sempre: "${message}"`,
+      role: 'Vigile',
+      greeting: message
+    })
   }
 
   createPlayer() {
-    this.player = this.physics.add.sprite(20 * this.TILE_SIZE, 18 * this.TILE_SIZE, 'player', 0)
+    // Start in piazza
+    this.player = this.physics.add.sprite(15 * this.TILE, 16 * this.TILE, 'player', 0)
     this.player.setDepth(20)
     this.player.setCollideWorldBounds(true)
-    this.player.setSize(10, 10)
-    this.player.setOffset(3, 6)
-
-    this.physics.world.setBounds(0, 0, this.MAP_WIDTH * this.TILE_SIZE, this.MAP_HEIGHT * this.TILE_SIZE)
+    this.player.setSize(10, 10).setOffset(3, 6)
+    this.physics.world.setBounds(0, 0, this.W * this.TILE, this.H * this.TILE)
   }
 
   createNPCs() {
     const npcData = [
-      {
-        x: 18, y: 13,
-        name: 'Marco il Panettiere',
-        personality: 'Sei Marco, un panettiere allegro di 45 anni. Ami parlare del tuo pane e della famiglia.',
-        role: 'Panettiere',
-        greeting: 'Buongiorno! Senti che profumo?',
-        frame: TILES.NPC_FRAMES[0]
-      },
-      {
-        x: 22, y: 15,
-        name: 'Sofia la Bibliotecaria',
-        personality: 'Sei Sofia, bibliotecaria timida di 32 anni. Ami i libri antichi e hai un gatto, Aristotele.',
-        role: 'Bibliotecaria',
-        greeting: 'Oh, ciao... stavo leggendo...',
-        frame: TILES.NPC_FRAMES[1]
-      },
-      {
-        x: 16, y: 17,
-        name: 'Giovanni il Vecchio',
-        personality: 'Sei Giovanni, anziano di 78 anni. Racconti storie del passato, a volte esagerando.',
-        role: 'Saggio',
-        greeting: 'Ah, i giovani... siediti, ti racconto...',
-        frame: TILES.NPC_FRAMES[2]
-      },
-      {
-        x: 24, y: 13,
-        name: 'Luna la Guaritrice',
-        personality: 'Sei Luna, erborista misteriosa di 25 anni. Parli per enigmi e credi nella magia.',
-        role: 'Guaritrice',
-        greeting: 'Le erbe sapevano che saresti venuto...',
-        frame: TILES.NPC_FRAMES[3]
-      },
-      {
-        x: 20, y: 11,
-        name: 'Tommaso il Sindaco',
-        personality: 'Sei Tommaso, sindaco pomposo di 55 anni. Ami sentirti importante.',
-        role: 'Sindaco',
-        greeting: 'Salve, cittadino! Sono il sindaco!',
-        frame: TILES.NPC_FRAMES[4]
-      },
-      {
-        x: 23, y: 17,
-        name: 'Rosa la Locandiera',
-        personality: 'Sei Rosa, locandiera pettegola di 40 anni. Sai tutto di tutti.',
-        role: 'Locandiera',
-        greeting: 'Benvenuto! Hai sentito l\'ultima?',
-        frame: TILES.NPC_FRAMES[5]
-      }
+      { x: 14, y: 15, name: 'Marco il Panettiere', personality: 'Panettiere allegro, ami il pane e la famiglia.', role: 'Panettiere' },
+      { x: 16, y: 15, name: 'Sofia la Bibliotecaria', personality: 'Bibliotecaria timida, ami i libri antichi.', role: 'Bibliotecaria' },
+      { x: 13, y: 17, name: 'Giovanni il Vecchio', personality: 'Anziano saggio, racconti storie del passato.', role: 'Saggio' },
+      { x: 17, y: 17, name: 'Rosa la Locandiera', personality: 'Locandiera pettegola, sai tutto di tutti.', role: 'Locandiera' },
     ]
 
     npcData.forEach(data => {
-      const sprite = this.physics.add.sprite(
-        data.x * this.TILE_SIZE,
-        data.y * this.TILE_SIZE,
-        'tileset',
-        data.frame
-      )
-      sprite.setDepth(15)
-      sprite.setImmovable(true)
+      const sprite = this.physics.add.sprite(data.x * this.TILE, data.y * this.TILE, 'tileset', TILES.NPC)
+      sprite.setDepth(15).setImmovable(true)
 
-      // NPC wander
+      const nameTag = this.add.text(data.x * this.TILE, data.y * this.TILE - 10, data.name.split(' ')[0], {
+        fontSize: '6px', color: '#fff', backgroundColor: '#333a', padding: { x: 1, y: 1 }
+      }).setOrigin(0.5).setDepth(16)
+
+      sprite.setData('nameTag', nameTag)
+
+      // Gentle wandering
       this.time.addEvent({
-        delay: Phaser.Math.Between(2000, 4000),
+        delay: Phaser.Math.Between(3000, 5000),
         callback: () => this.wanderNPC(sprite),
         loop: true
       })
-
-      // Name tag
-      const nameTag = this.add.text(
-        data.x * this.TILE_SIZE,
-        data.y * this.TILE_SIZE - 12,
-        data.name.split(' ')[0],
-        { fontSize: '7px', color: '#fff', backgroundColor: '#333a', padding: { x: 2, y: 1 } }
-      ).setOrigin(0.5).setDepth(16)
-
-      sprite.setData('nameTag', nameTag)
 
       this.npcs.push({
         sprite,
         name: data.name,
         personality: data.personality,
         role: data.role,
-        greeting: data.greeting
+        greeting: `Ciao! Sono ${data.name.split(' ')[0]}.`
       })
     })
   }
 
   wanderNPC(sprite: Phaser.Physics.Arcade.Sprite) {
     if (!sprite.active) return
-
-    const dirs = [
-      { x: 16, y: 0 }, { x: -16, y: 0 },
-      { x: 0, y: 16 }, { x: 0, y: -16 },
-      { x: 0, y: 0 }
-    ]
-    const dir = Phaser.Math.RND.pick(dirs)
-
+    const dir = Phaser.Math.RND.pick([
+      { x: 8, y: 0 }, { x: -8, y: 0 }, { x: 0, y: 8 }, { x: 0, y: -8 }, { x: 0, y: 0 }
+    ])
     this.tweens.add({
       targets: sprite,
       x: sprite.x + dir.x,
       y: sprite.y + dir.y,
-      duration: 400,
-      ease: 'Linear',
+      duration: 500,
       onUpdate: () => {
         const tag = sprite.getData('nameTag') as Phaser.GameObjects.Text
-        if (tag) tag.setPosition(sprite.x, sprite.y - 12)
+        if (tag) tag.setPosition(sprite.x, sprite.y - 10)
       }
     })
   }
@@ -432,14 +345,12 @@ export class TownScene extends Phaser.Scene {
   setupInput() {
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.input.keyboard!.addCapture(['W', 'A', 'S', 'D', 'E', 'ENTER', 'ESC'])
-
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
     }
-
     this.input.keyboard!.on('keydown-E', () => this.interact())
     this.input.keyboard!.on('keydown-ENTER', () => this.interact())
     this.input.keyboard!.on('keydown-ESC', () => this.scene.start('MenuScene'))
@@ -448,16 +359,16 @@ export class TownScene extends Phaser.Scene {
   setupCamera() {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setZoom(2.5)
-    this.cameras.main.setBounds(0, 0, this.MAP_WIDTH * this.TILE_SIZE, this.MAP_HEIGHT * this.TILE_SIZE)
+    this.cameras.main.setBounds(0, 0, this.W * this.TILE, this.H * this.TILE)
   }
 
   createUI() {
-    this.add.text(10, 10, '🏘️ Villaggio di Sgravo', {
-      fontSize: '10px', color: '#fff', backgroundColor: '#333a', padding: { x: 6, y: 3 }
+    this.add.text(10, 10, '🏘️ Verbania', {
+      fontSize: '10px', color: '#fff', backgroundColor: '#333a', padding: { x: 4, y: 2 }
     }).setScrollFactor(0).setDepth(100)
 
-    this.add.text(400, 290, '↑←↓→: Muovi | E: Interagisci | ESC: Menu', {
-      fontSize: '8px', color: '#333', backgroundColor: '#fffa', padding: { x: 4, y: 2 }
+    this.add.text(400, 290, '↑←↓→: Muovi | E: Parla | ESC: Menu', {
+      fontSize: '7px', color: '#333', backgroundColor: '#fffa', padding: { x: 3, y: 2 }
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(100)
   }
 
@@ -472,16 +383,11 @@ export class TownScene extends Phaser.Scene {
 
   showMessage(text: string) {
     if (this.messageText) this.messageText.destroy()
-
     this.messageText = this.add.text(400, 40, text, {
-      fontSize: '12px', color: '#fff', backgroundColor: '#1e293bdd', padding: { x: 12, y: 8 }
+      fontSize: '10px', color: '#fff', backgroundColor: '#1e293bdd', padding: { x: 10, y: 6 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(100)
-
     this.time.delayedCall(3000, () => {
-      if (this.messageText) {
-        this.messageText.destroy()
-        this.messageText = undefined
-      }
+      if (this.messageText) { this.messageText.destroy(); this.messageText = undefined }
     })
   }
 
@@ -491,53 +397,43 @@ export class TownScene extends Phaser.Scene {
     const speed = 80
     let vx = 0, vy = 0, moving = false
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      vx = -speed; this.playerDirection = 'left'; moving = true
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      vx = speed; this.playerDirection = 'right'; moving = true
-    }
-
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      vy = -speed; this.playerDirection = 'up'; moving = true
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      vy = speed; this.playerDirection = 'down'; moving = true
-    }
+    if (this.cursors.left.isDown || this.wasd.A.isDown) { vx = -speed; this.playerDirection = 'left'; moving = true }
+    else if (this.cursors.right.isDown || this.wasd.D.isDown) { vx = speed; this.playerDirection = 'right'; moving = true }
+    if (this.cursors.up.isDown || this.wasd.W.isDown) { vy = -speed; this.playerDirection = 'up'; moving = true }
+    else if (this.cursors.down.isDown || this.wasd.S.isDown) { vy = speed; this.playerDirection = 'down'; moving = true }
 
     this.player.setVelocity(vx, vy)
+    this.player.anims.play(moving ? `player-walk-${this.playerDirection}` : `player-idle-${this.playerDirection}`, true)
 
-    if (moving) {
-      this.player.anims.play(`player-walk-${this.playerDirection}`, true)
-    } else {
-      this.player.anims.play(`player-idle-${this.playerDirection}`, true)
-    }
-
-    // Check nearby NPCs
+    // Check nearby
     this.nearbyNPC = null
     this.nearbyDoor = null
-    let closest = 30
 
     for (const npc of this.npcs) {
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.sprite.x, npc.sprite.y)
-      if (d < closest) { closest = d; this.nearbyNPC = npc }
-    }
-
-    if (!this.nearbyNPC) {
-      let closestDoor = 25
-      for (const door of this.doors) {
-        const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y)
-        if (d < closestDoor) { closestDoor = d; this.nearbyDoor = door }
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.sprite.x, npc.sprite.y) < 25) {
+        this.nearbyNPC = npc
+        break
       }
     }
 
-    // Interaction hint
+    if (!this.nearbyNPC) {
+      for (const door of this.doors) {
+        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, door.x, door.y) < 20) {
+          this.nearbyDoor = door
+          break
+        }
+      }
+    }
+
+    // Hint
     if (!this.interactHint) {
       this.interactHint = this.add.text(400, 260, '', {
-        fontSize: '9px', color: '#fff', backgroundColor: '#333d', padding: { x: 6, y: 3 }
+        fontSize: '8px', color: '#fff', backgroundColor: '#333d', padding: { x: 4, y: 2 }
       }).setOrigin(0.5).setScrollFactor(0).setDepth(100)
     }
 
     if (this.nearbyNPC) {
-      this.interactHint.setText(`E: Parla con ${this.nearbyNPC.name}`)
+      this.interactHint.setText(`E: Parla con ${this.nearbyNPC.name.split(' ')[0]}`)
       this.interactHint.setVisible(true)
     } else if (this.nearbyDoor) {
       this.interactHint.setText(`E: ${this.nearbyDoor.name}`)
